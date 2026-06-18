@@ -1,4 +1,12 @@
 #include "systemcalls.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -17,7 +25,38 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+  int ret = system(cmd);
+
+  /*
+   ### Checking the category of failure and what caused it ###
+   *** Status Checkers ***
+   - WIFEXITED: Returns true if the child process terminated normally
+   - WIFSIGNALED: Returns true if the child process was terminated by a signal
+   
+   *** Status Value Extractors ***
+   - WEXITSTATUS: Actual exit code (0 for success, 1 for failure)
+   - WTERMSIG: This returns the number of signal that caused child process to terminate
+   */
+
+  if (ret == -1) {
+    perror("FAILURE: system() call");
+    return false;
+  } 
+
+  if (WIFEXITED(ret)) { 
+      int exit_code = WEXITSTATUS(ret);
+      printf("Command exited with error code: %d\n", exit_code);
+      return (exit_code == 0); // True only if exit_code is 0 (success).
+  }
+  
+  if (WIFSIGNALED(ret)) {
+      int signal_num = WTERMSIG(ret);
+      printf("Command killed by signal: %d\n", signal_num);
+      return false;
+    }
+  
+
+  return false;
 }
 
 /**
@@ -36,32 +75,76 @@ bool do_system(const char *cmd)
 
 bool do_exec(int count, ...)
 {
-    va_list args;
-    va_start(args, count);
-    char * command[count+1];
-    int i;
-    for(i=0; i<count; i++)
-    {
-        command[i] = va_arg(args, char *);
+  va_list args;
+  va_start(args, count);
+  char * command[count+1];
+  int i;
+  for(i=0; i<count; i++)
+  {
+      command[i] = va_arg(args, char *);
+  }
+  command[count] = NULL;
+  // this line is to avoid a compile warning before your implementation is complete
+  // and may be removed
+  command[count] = command[count];
+  // printf("\n######## command[0] %s #######\n", command[0]);
+  // printf("\n######## command[1] %s #######\n", command[1]);
+  // printf("\n######## count -> %d #######\n", count);
+
+  va_end(args);
+
+  /*
+  * TODO:
+  *   Execute a system command by calling fork, execv(),
+  *   and wait instead of system (see LSP page 161).
+  *   Use the command[0] as the full path to the command to execute
+  *   (first argument to execv), and use the remaining arguments
+  *   as second argument to the execv() command.
+  *
+  */
+
+  pid_t pid;
+
+  // Clone the process
+  pid = fork(); 
+
+  if (pid == -1) {
+    perror("FAILURE: fork() call");
+
+    // Return false to the the parent process
+    return false;
+  } 
+
+  // Inside the child process
+  if (pid == 0) {
+
+    // Executing the command inside the child process
+    int ret = execv(command[0], command);
+
+    printf("###### Status code: %d\n", ret);
+    
+    if (ret == -1) {
+      perror("FAILURE: execv() for 'echo' command");
+
+      // Terminate the child process
+      exit(EXIT_FAILURE);
     }
-    command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
+  }
 
-/*
- * TODO:
- *   Execute a system command by calling fork, execv(),
- *   and wait instead of system (see LSP page 161).
- *   Use the command[0] as the full path to the command to execute
- *   (first argument to execv), and use the remaining arguments
- *   as second argument to the execv() command.
- *
-*/
+  // Waiting for child process with PID 0 to finish
+  int status;
+  if (waitpid(pid, &status, 0) == -1) {
+    perror("FAILURE: waitpid()");
+    return false;
+  }
 
-    va_end(args);
+  if (WIFEXITED(status)) {
+    int exit_code = WEXITSTATUS(status);
+    printf("The process exited normally with exit code: %d", exit_code);
+    return (exit_code == 0);
+  }
 
-    return true;
+  return false;
 }
 
 /**
@@ -92,8 +175,59 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+  printf("%d\n", count);
+  printf("##### command[0] %s #####\n", command[0]);
+  printf("##### command[1] %s #####\n", command[1]);
+  printf("##### command[2] %s #####\n", command[2]);
 
-    va_end(args);
+  pid_t pid;
+  pid = fork();
+  if (pid == -1) {
+    perror("FAILURE: fork() in do_exec_redirect()");
+    return false;
+  }
 
-    return true;
+  // Starting the child process
+  if (pid == 0) {
+    int fd = open("testfile.txt", O_WRONLY | O_CREAT, 0644);
+    if (fd == -1) {
+      perror("FAILURE: open()");
+      exit(EXIT_FAILURE);
+    }
+
+    if (dup2(fd, 1) == -1) {
+      perror("FAILURE: dup2()");
+      close(fd);
+      exit(EXIT_FAILURE);
+    }
+
+    // Executing the command inside the child process
+    int ret = execv(command[0], command);
+
+    printf("###### Status code: %d\n", ret);
+    
+    if (ret == -1) {
+      perror("FAILURE: execv() for 'echo' command");
+
+      // Terminate the child process
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  // Waiting for child process with PID 0 to finish
+  int status;
+  if (waitpid(pid, &status, 0) == -1) {
+    perror("FAILURE: waitpid()");
+    return false;
+  }
+
+  if (WIFEXITED(status)) {
+    int exit_code = WEXITSTATUS(status);
+    printf("The process exited normally with exit code: %d", exit_code);
+    return (exit_code == 0);
+  }
+
+  va_end(args);
+
+  return false;
 }
