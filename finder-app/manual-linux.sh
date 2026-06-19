@@ -12,6 +12,7 @@ BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
+SYSROOT=$(aarch64-none-linux-gnu-gcc -print-sysroot)
 
 if [ $# -lt 1 ]; then
   echo "Using default directory ${OUTDIR} for output"
@@ -20,7 +21,11 @@ else
   echo "Using passed directory ${OUTDIR} for output"
 fi
 
-mkdir -p ${OUTDIR}
+if [[ ! -d ${OUTDIR}]]; then
+  echo -e "\n -- Directory could not be found!"
+  echo -e "-- Creating directory ..."
+  mkdir -p ${OUTDIR}
+fi
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/linux-stable" ]; then
@@ -118,7 +123,7 @@ sudo chown -R root:root ${OUTDIR}/rootfs
 # TODO: Create initramfs.cpio.gz
 cd "${OUTDIR}/rootfs"
 # Compress the root file system and copy it to the main directory
-find . | cpio -H newc -ov --owner root:root >${OUTDIR}/initramfs.cpio
+find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
 cd "${OUTDIR}"
 echo -e "\n-- Compressing the initramfs.cpio file ..."
 gzip -f initramfs.cpio
