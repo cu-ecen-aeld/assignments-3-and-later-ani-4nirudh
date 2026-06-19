@@ -21,7 +21,7 @@ else
   echo "Using passed directory ${OUTDIR} for output"
 fi
 
-if [[ ! -d ${OUTDIR} ]]; then
+if [[ ! -d ${OUTDIR}]]; then
   echo -e "\n -- Directory could not be found!"
   echo -e "-- Creating directory ..."
   mkdir -p ${OUTDIR}
@@ -47,6 +47,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
 fi
 
 echo "Adding the Image in outdir"
+cp -rv ${OUTDIR}/linux-stable/arch/arm64/boot/Image ${OUTDIR}
 
 echo "Creating the staging directory for the root filesystem"
 cd "$OUTDIR"
@@ -123,7 +124,7 @@ sudo chown -R root:root ${OUTDIR}/rootfs
 # TODO: Create initramfs.cpio.gz
 cd "${OUTDIR}/rootfs"
 # Compress the root file system and copy it to the main directory
-find . | cpio -H newc -ov --owner root:root >${OUTDIR}/initramfs.cpio
+find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
 cd "${OUTDIR}"
 echo -e "\n-- Compressing the initramfs.cpio file ..."
 gzip -f initramfs.cpio
